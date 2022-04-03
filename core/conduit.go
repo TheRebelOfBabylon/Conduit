@@ -103,7 +103,7 @@ func startLnd(cfg *Config, wg sync.WaitGroup, log *zerolog.Logger, shutdownInter
 	// Check to see if we called -V, if so, we call lnd -V, display and exit
 	if cfg.LndShowVersion {
 		cmd := exec.Command("lnd", "--version")
-		cmdReader, err := cmd.StdoutPipe()
+		cmdReader, err := cmd.StderrPipe()
 		if err != nil {
 			log.Fatal().Msg(fmt.Sprint(err))
 			return nil, err
@@ -125,10 +125,12 @@ func startLnd(cfg *Config, wg sync.WaitGroup, log *zerolog.Logger, shutdownInter
 		}
 		return nil, ErrLndVersion
 	}
-	// We get all LND config from our config to pass
+	// We get all LND config from our config to pass onto LND
+	args := cfg.GetConfigTagValues()
+
 	// startup LND
-	cmd := exec.Command("lnd", "--bitcoin.simnet", "--bitcoin.active", "--bitcoin.node=btcd")
-	cmdReader, err := cmd.StdoutPipe()
+	cmd := exec.Command("lnd", args...)
+	cmdReader, err := cmd.StderrPipe()
 	if err != nil {
 		log.Fatal().Msg(fmt.Sprint(err))
 		return nil, err
