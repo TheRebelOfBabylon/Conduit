@@ -46,9 +46,9 @@ func TestInitConfigNoYAML(t *testing.T) {
 			}
 		}()
 	}
-	config, err := InitConfig()
+	config, err := InitConfig(true)
 	if err != nil {
-		t.Errorf("%s", err)
+		t.Error(err.Error())
 	}
 	defaultCfg := default_config()
 	if !cmp.Equal(*config, *defaultCfg) {
@@ -132,7 +132,7 @@ func TestInitConfigFromYAML(t *testing.T) {
 	}
 	config_file.Sync()
 	config_file.Close()
-	config, err := InitConfig()
+	config, err := InitConfig(true)
 	if err != nil {
 		t.Errorf("%s", err)
 	}

@@ -33,6 +33,7 @@ import (
 
 const (
 	ErrLndNotFound = errors.Error("lnd command not found. Please install lnd to use conduit")
+	ErrLndVersion  = errors.Error("lnd --version called. Gracefully exiting now...")
 )
 
 var (
@@ -50,6 +51,10 @@ func parseLndLog(scan *bufio.Scanner, log *zerolog.Logger, re *regexp.Regexp, sh
 		default:
 			line := scan.Text()
 			captures := re.FindStringSubmatch(line)
+			// prevent panic conditions where we're looking at indices that don't exist
+			if len(captures) == 0 {
+				continue
+			}
 			logLvl, subName, text := captures[1], captures[2], captures[3]
 			switch logLvl {
 			case "INF":
@@ -76,10 +81,12 @@ func Main(shutdownInterceptor *intercept.Interceptor, cfg *Config, log zerolog.L
 	var wg sync.WaitGroup
 	// starting LND
 	_, err := startLnd(cfg, wg, &log, shutdownInterceptor)
-	if err != nil {
+	if err != nil && err != ErrLndVersion {
 		err = e.Wrap(err, "could not start lnd")
 		log.Fatal().Msg(err.Error())
 		return err
+	} else if err == ErrLndVersion {
+		return nil
 	}
 	<-shutdownInterceptor.ShutdownChannel()
 	wg.Wait()
@@ -87,15 +94,43 @@ func Main(shutdownInterceptor *intercept.Interceptor, cfg *Config, log zerolog.L
 }
 
 // startLnd starts LND if it's been installed with a given config
-func startLnd(_ *Config, wg sync.WaitGroup, log *zerolog.Logger, shutdownInterceptor *intercept.Interceptor) (*bufio.Scanner, error) {
+func startLnd(cfg *Config, wg sync.WaitGroup, log *zerolog.Logger, shutdownInterceptor *intercept.Interceptor) (*bufio.Scanner, error) {
 	// Let's check if LND is installed
 	if _, err := exec.LookPath("lnd"); err != nil {
 		log.Fatal().Msg(ErrLndNotFound.Error())
 		return nil, ErrLndNotFound
 	}
+	// Check to see if we called -V, if so, we call lnd -V, display and exit
+	if cfg.LndShowVersion {
+		cmd := exec.Command("lnd", "--version")
+		cmdReader, err := cmd.StderrPipe()
+		if err != nil {
+			log.Fatal().Msg(fmt.Sprint(err))
+			return nil, err
+		}
+		scanner := bufio.NewScanner(cmdReader)
+		go func() {
+			for scanner.Scan() {
+				fmt.Println(scanner.Text())
+				break
+			}
+		}()
+		if err := cmd.Start(); err != nil {
+			log.Fatal().Msg(fmt.Sprint(err))
+			return scanner, err
+		}
+		if err := cmd.Wait(); err != nil {
+			log.Fatal().Msg(fmt.Sprint(err))
+			return scanner, err
+		}
+		return nil, ErrLndVersion
+	}
+	// We get all LND config from our config to pass onto LND
+	args := cfg.GetConfigTagValues()
+
 	// startup LND
-	cmd := exec.Command("lnd", "--bitcoin.simnet", "--bitcoin.active", "--bitcoin.node=btcd")
-	cmdReader, err := cmd.StdoutPipe()
+	cmd := exec.Command("lnd", args...)
+	cmdReader, err := cmd.StderrPipe()
 	if err != nil {
 		log.Fatal().Msg(fmt.Sprint(err))
 		return nil, err
