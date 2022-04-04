@@ -12,15 +12,15 @@ const (
 	JSONRPC_SERVER_ERR_MAX       ResponseErrorCode = -32099
 )
 
-type ResponseError struct {
+type BaseResponseError struct {
 	Code    ResponseErrorCode `json:"code"`
 	Message string            `json:"message"`
-	Data    interface{}       `json:"data"`
+	// Data    interface{}       `json:"data"` // This is to be implemented for specific use cases
 }
 
-type Response[T IdType] struct {
-	JsonRpcVersion string        `json:"jsonrpc"`
-	Result         interface{}   `json:"result"`
-	Err            ResponseError `json:"error"`
-	Id             T             `json:"id"`
+type BaseResponse[T IdType] struct {
+	JsonRpcVersion string `json:"jsonrpc"`
+	// Result         interface{}   `json:"result"` // This is to be implemented for specific use cases
+	Err BaseResponseError `json:"error"`
+	Id  T                 `json:"id"`
 }
